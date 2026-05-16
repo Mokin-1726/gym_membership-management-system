@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payments — Gym Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand">💪 IRONCORE</div>
+  <ul class="nav-menu">
+    <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+    <li><a href="{{ url_for('members') }}">Members</a></li>
+    <li><a href="{{ url_for('trainers') }}">Trainers</a></li>
+    <li><a href="{{ url_for('plans') }}">Plans</a></li>
+    <li><a href="{{ url_for('payments') }}">Payments</a></li>
+    <li><a href="{{ url_for('attendance') }}">Attendance</a></li>
+    <li><a href="{{ url_for('trainer_attendance') }}">Trainer Attendance</a></li>
+  </ul>
+  <div class="nav-user">
+    <a href="{{ url_for('admin_change_password') }}" class="btn btn-sm btn-secondary" style="margin-right:6px;">🔑 Password</a><a href="{{ url_for('logout') }}" class="btn btn-sm btn-ghost">Logout</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="page-header">
+    <div><h1>Payments</h1><p>Revenue tracking and records</p></div>
+    <button class="btn btn-primary" onclick="openModal('addPayModal')">+ Record Payment</button>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Today's Revenue</div>
+      <div class="stat-number">${{ "%.0f"|format(stats.today_revenue) }}</div>
+      <div class="stat-sub">{{ stats.today_count }} transactions</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">This Month</div>
+      <div class="stat-number">${{ "%.0f"|format(stats.monthly_revenue) }}</div>
+      <div class="stat-sub">{{ stats.monthly_count }} payments</div>
+    </div>
+  </div>
+
+  <form method="GET" action="{{ url_for('payments') }}" class="search-bar">
+    <input type="text" name="search" placeholder="Search by member name…" class="search-input" value="{{ search }}">
+    <select name="status" class="filter-select" onchange="this.form.submit()">
+      <option value="">All Status</option>
+      <option value="completed" {% if status_filter=='completed' %}selected{% endif %}>Completed</option>
+      <option value="pending"   {% if status_filter=='pending'   %}selected{% endif %}>Pending</option>
+      <option value="failed"    {% if status_filter=='failed'    %}selected{% endif %}>Failed</option>
+    </select>
+    <select name="method" class="filter-select" onchange="this.form.submit()">
+      <option value="">All Methods</option>
+      <option value="cash"   {% if method_filter=='cash'   %}selected{% endif %}>Cash</option>
+      <option value="card"   {% if method_filter=='card'   %}selected{% endif %}>Card</option>
+      <option value="online" {% if method_filter=='online' %}selected{% endif %}>Online</option>
+      <option value="upi"    {% if method_filter=='upi'    %}selected{% endif %}>UPI</option>
+    </select>
+    <button type="submit" class="btn btn-secondary">Search</button>
+  </form>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Pay ID</th><th>Member</th><th>Plan</th><th>Amount</th>
+          <th>Method</th><th>Date</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payments %}
+        <tr>
+          <td class="mono">PAY{{ "%04d"|format(p.id) }}</td>
+          <td style="font-weight:600;">{{ p.full_name }}</td>
+          <td>{{ p.plan_name }}</td>
+          <td style="color:var(--green); font-weight:700;">${{ "%.2f"|format(p.amount) }}</td>
+          <td>{{ p.payment_method.capitalize() }}</td>
+          <td>{{ p.payment_date }}</td>
+          <td><span class="badge badge-{% if p.status=='completed' %}active{% else %}{{ p.status }}{% endif %}">{{ p.status.capitalize() }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7">
+          <div class="empty-state"><div class="icon">💳</div><p>No payments found</p></div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div id="addPayModal" class="modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('addPayModal')">✕</button>
+    <div class="modal-title">Record Payment</div>
+    <form method="POST" action="{{ url_for('add_payment') }}">
+      <div class="form-group">
+        <label>Member</label>
+        <select name="member_id" required>
+          <option value="">Select Member</option>
+          {% for m in members %}
+          <option value="{{ m.id }}">M{{ "%03d"|format(m.id) }} — {{ m.full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Plan</label>
+        <select name="plan_id" required>
+          <option value="">Select Plan</option>
+          {% for p in plans %}
+          <option value="{{ p.id }}">{{ p.plan_name }} — ${{ p.price }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Amount ($)</label><input type="number" name="amount" step="0.01" required></div>
+        <div class="form-group">
+          <label>Payment Method</label>
+          <select name="payment_method" required>
+            <option value="">Select</option>
+            <option value="cash">Cash</option>
+            <option value="card">Card</option>
+            <option value="online">Online</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Payment Date</label><input type="date" name="payment_date" required></div>
+        <div class="form-group"><label>Transaction ID</label><input type="text" name="transaction_id" placeholder="Optional"></div>
+      </div>
+      <div class="form-group"><label>Notes</label><textarea name="notes" rows="2"></textarea></div>
+      <div class="form-buttons">
+        <button type="submit" class="btn btn-primary">Record Payment</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('addPayModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+window.addEventListener('click', e => {
+  document.querySelectorAll('.modal.open').forEach(m => { if (e.target === m) m.classList.remove('open'); });
+});
+</script>
+</body>
+</html>

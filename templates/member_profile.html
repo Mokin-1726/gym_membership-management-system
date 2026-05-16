@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Profile — Gym Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="member-portal">
+<nav class="navbar">
+  <div class="nav-brand">💪 IRONCORE</div>
+  <ul class="nav-menu">
+    <li><a href="{{ url_for('member_dashboard') }}">My Dashboard</a></li>
+    <li><a href="{{ url_for('member_profile') }}" class="active">My Profile</a></li>
+    <li><a href="{{ url_for('member_attendance') }}">Attendance</a></li>
+    <li><a href="{{ url_for('member_payments') }}">💳 Payments</a></li>
+    <li><a href="{{ url_for('member_change_password') }}">🔑 Change Password</a></li>
+  </ul>
+  <div class="nav-user">
+    <div class="nav-avatar" style="background:var(--blue);">{{ member.full_name[0] | upper }}</div>
+    <span>{{ member.full_name }}</span>
+    <a href="{{ url_for('member_logout') }}" class="btn btn-sm btn-ghost" style="margin-left:8px;">Logout</a>
+  </div>
+</nav>
+
+<div class="container" style="max-width:720px;">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="page-header">
+    <div>
+      <h1>My Profile</h1>
+      <p>Update your personal information and preferences</p>
+    </div>
+    <a href="{{ url_for('member_dashboard') }}" class="btn btn-secondary">← Dashboard</a>
+  </div>
+
+  <!-- Read-only membership info -->
+  <div class="card" style="margin-bottom:20px;">
+    <div class="section-title" style="font-size:16px; padding-bottom:12px;">Membership Details <span style="font-size:12px; color:var(--muted); font-weight:400;">(contact admin to change)</span></div>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;">Plan</div>
+        <div style="font-weight:700;">{{ member.plan_name or '—' }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;">Start Date</div>
+        <div style="font-weight:700;">{{ member.join_date }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;">Expiry Date</div>
+        <div style="font-weight:700;">{{ member.end_date }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;">Status</div>
+        <span class="badge badge-{{ member.status }}">{{ member.status.capitalize() }}</span>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;">Email</div>
+        <div style="font-weight:700; font-size:13px;">{{ member.email }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;">Member ID</div>
+        <div style="font-family:var(--mono-font); font-size:14px; color:var(--accent);">M{{ "%03d"|format(member.id) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Editable profile form -->
+  <div class="card">
+    <div class="section-title" style="font-size:16px; padding-bottom:12px;">Edit Information</div>
+    <form method="POST" action="{{ url_for('member_profile') }}">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" name="full_name" value="{{ member.full_name }}" required>
+        </div>
+        <div class="form-group">
+          <label>Phone Number</label>
+          <input type="tel" name="phone" value="{{ member.phone }}" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date of Birth</label>
+          <input type="date" name="date_of_birth" value="{{ member.date_of_birth }}" required>
+        </div>
+        <div class="form-group">
+          <label>Gender</label>
+          <select name="gender" required>
+            {% for g in ['Male','Female','Other'] %}
+            <option value="{{ g }}" {% if member.gender == g %}selected{% endif %}>{{ g }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Address</label>
+        <input type="text" name="address" value="{{ member.address or '' }}">
+      </div>
+
+      <div class="section-title" style="font-size:16px; margin-top:24px; padding-bottom:12px;">Fitness Stats & Goals</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Current Weight (kg)</label>
+          <input type="number" name="weight" step="0.1" min="30" max="300" value="{{ member.weight or '' }}" placeholder="e.g. 75.5">
+        </div>
+        <div class="form-group">
+          <label>Height (cm)</label>
+          <input type="number" name="height" step="0.1" min="100" max="250" value="{{ member.height or '' }}" placeholder="e.g. 175">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Fitness Goal</label>
+        <input type="text" name="fitness_goal" value="{{ member.fitness_goal or '' }}" placeholder="e.g. Lose 10kg, Run a 5K, Build muscle…">
+      </div>
+      <div class="form-group">
+        <label>Preferred Trainer</label>
+        <select name="trainer_id">
+          <option value="">No preference</option>
+          {% for t in trainers %}
+          <option value="{{ t.id }}" {% if member.trainer_id == t.id %}selected{% endif %}>
+            {{ t.full_name }} — {{ t.specialization }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-buttons">
+        <button type="submit" class="btn btn-primary" style="background:var(--blue);">Save Changes</button>
+        <a href="{{ url_for('member_dashboard') }}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+</body>
+</html>

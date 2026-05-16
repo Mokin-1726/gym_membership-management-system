@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance — Gym Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand">💪 IRONCORE</div>
+  <ul class="nav-menu">
+    <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+    <li><a href="{{ url_for('members') }}">Members</a></li>
+    <li><a href="{{ url_for('trainers') }}">Trainers</a></li>
+    <li><a href="{{ url_for('plans') }}">Plans</a></li>
+    <li><a href="{{ url_for('payments') }}">Payments</a></li>
+    <li><a href="{{ url_for('attendance') }}" class="active">Attendance</a></li>
+    <li><a href="{{ url_for('trainer_attendance') }}">Trainer Attendance</a></li>
+  </ul>
+  <div class="nav-user">
+    <a href="{{ url_for('admin_change_password') }}" class="btn btn-sm btn-secondary" style="margin-right:6px;">🔑 Password</a><a href="{{ url_for('logout') }}" class="btn btn-sm btn-ghost">Logout</a>
+  </div>
+</nav>
+
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="page-header">
+    <div>
+      <h1>Attendance</h1>
+      <p>Track member check-ins and gym visits</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('markModal')">✅ Mark Attendance</button>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Today's Visits</div>
+      <div class="stat-number">{{ stats.today_count }}</div>
+      <div class="stat-sub">Members checked in today</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Currently Inside</div>
+      <div class="stat-number" style="color:var(--green);">{{ stats.currently_in }}</div>
+      <div class="stat-sub">Not yet checked out</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">This Month</div>
+      <div class="stat-number">{{ stats.month_count }}</div>
+      <div class="stat-sub">Total visits this month</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Session</div>
+      <div class="stat-number">{{ stats.avg_duration }}</div>
+      <div class="stat-sub">Minutes per visit</div>
+    </div>
+  </div>
+
+  <!-- Today's Live Attendance -->
+  <div class="table-wrap" style="margin-bottom:24px;">
+    <div class="table-header">
+      <span class="table-title">🟢 Today's Check-ins</span>
+      <span style="font-size:12px; color:var(--muted);">Live — updates on refresh</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Member</th>
+          <th>Plan</th>
+          <th>Check In</th>
+          <th>Check Out</th>
+          <th>Duration</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in today %}
+        <tr>
+          <td style="font-weight:700;">{{ r.full_name }}</td>
+          <td>{{ r.plan_name or '—' }}</td>
+          <td class="mono">{{ r.check_in.strftime('%I:%M %p') if r.check_in else '—' }}</td>
+          <td class="mono">{{ r.check_out.strftime('%I:%M %p') if r.check_out else '—' }}</td>
+          <td>
+            {% if r.duration_minutes %}
+              {{ r.duration_minutes }} min
+            {% elif r.check_in and not r.check_out %}
+              <span style="color:var(--green); font-weight:600;">In progress…</span>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if r.check_out %}
+              <span class="badge badge-completed">Done</span>
+            {% else %}
+              <span class="badge badge-active">Inside</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if not r.check_out %}
+            <a href="{{ url_for('checkout', attendance_id=r.id) }}"
+               class="btn btn-sm btn-secondary">Check Out</a>
+            {% endif %}
+            <a href="{{ url_for('delete_attendance', attendance_id=r.id) }}"
+               class="btn btn-sm btn-danger"
+               onclick="return confirm('Delete this record?')">✕</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7">
+          <div class="empty-state"><div class="icon">🏋️</div><p>No check-ins today yet</p></div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Weekly Chart -->
+  <div class="chart-card" style="margin-bottom:24px;">
+    <div class="chart-title">📊 Weekly Attendance Trend</div>
+    <canvas id="weeklyChart" height="80"></canvas>
+  </div>
+
+  <!-- Search & Filter -->
+  <form method="GET" action="{{ url_for('attendance') }}" class="search-bar">
+    <input type="text" name="search" placeholder="Search by member name…"
+           class="search-input" value="{{ search }}">
+    <input type="date" name="date" class="filter-select" value="{{ date_filter }}"
+           title="Filter by date">
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    <a href="{{ url_for('attendance') }}" class="btn btn-ghost">Clear</a>
+  </form>
+
+  <!-- All Records Table -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title">All Attendance Records</span>
+      <span style="font-size:12px; color:var(--muted);">{{ records|length }} records</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Member</th>
+          <th>Date</th>
+          <th>Check In</th>
+          <th>Check Out</th>
+          <th>Duration</th>
+          <th>Marked By</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr>
+          <td class="mono" style="color:var(--muted);">#{{ r.id }}</td>
+          <td style="font-weight:600;">{{ r.full_name }}</td>
+          <td>{{ r.date }}</td>
+          <td class="mono">{{ r.check_in.strftime('%I:%M %p') if r.check_in else '—' }}</td>
+          <td class="mono">{{ r.check_out.strftime('%I:%M %p') if r.check_out else
+            '<span style="color:var(--yellow)">Not out</span>' }}</td>
+          <td>{{ r.duration_minutes ~ ' min' if r.duration_minutes else '—' }}</td>
+          <td>
+            <span class="badge badge-{% if r.marked_by == 'admin' %}active{% elif r.marked_by == 'member' %}pending{% else %}inactive{% endif %}">
+              {{ r.marked_by.capitalize() }}
+            </span>
+          </td>
+          <td>
+            {% if not r.check_out %}
+            <a href="{{ url_for('checkout', attendance_id=r.id) }}"
+               class="btn btn-sm btn-secondary">Check Out</a>
+            {% endif %}
+            <a href="{{ url_for('delete_attendance', attendance_id=r.id) }}"
+               class="btn btn-sm btn-danger"
+               onclick="return confirm('Delete?')">✕</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8">
+          <div class="empty-state"><div class="icon">📋</div><p>No records found</p></div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Mark Attendance Modal -->
+<div id="markModal" class="modal">
+  <div class="modal-box" style="max-width:420px;">
+    <button class="modal-close" onclick="closeModal('markModal')">✕</button>
+    <div class="modal-title">✅ Mark Attendance</div>
+    <form method="POST" action="{{ url_for('mark_attendance') }}">
+      <div class="form-group">
+        <label>Select Member</label>
+        <select name="member_id" required>
+          <option value="">Choose a member…</option>
+          {% for m in members %}
+            {% if m.status == 'active' %}
+            <option value="{{ m.id }}">{{ m.full_name }} — M{{ "%03d"|format(m.id) }}</option>
+            {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Notes (optional)</label>
+        <input type="text" name="notes" placeholder="e.g. Personal training session">
+      </div>
+      <div class="form-buttons">
+        <button type="submit" class="btn btn-primary">Mark Present ✅</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('markModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+window.addEventListener('click', e => {
+  document.querySelectorAll('.modal.open').forEach(m => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// Weekly chart
+fetch('/api/attendance/weekly')
+  .then(r => r.json())
+  .then(data => {
+    const sorted = data.reverse();
+    const ctx = document.getElementById('weeklyChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: sorted.map(d => d.week_start || d.week_key),
+        datasets: [
+          {
+            label: 'Total Visits',
+            data: sorted.map(d => d.total_visits),
+            backgroundColor: 'rgba(249,115,22,.7)',
+            borderRadius: 6,
+          },
+          {
+            label: 'Unique Members',
+            data: sorted.map(d => d.unique_members),
+            backgroundColor: 'rgba(59,130,246,.5)',
+            borderRadius: 6,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { labels: { color: '#64748b' } } },
+        scales: {
+          x: { ticks: { color: '#64748b' }, grid: { color: '#2a2f42' } },
+          y: { ticks: { color: '#64748b' }, grid: { color: '#2a2f42' }, beginAtZero: true }
+        }
+      }
+    });
+  })
+  .catch(() => {}); // silently fail if no data
+</script>
+</body>
+</html>

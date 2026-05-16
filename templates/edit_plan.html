@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Edit Plan — Gym Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand">💪 IRONCORE</div>
+  <ul class="nav-menu">
+    <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+    <li><a href="{{ url_for('members') }}">Members</a></li>
+    <li><a href="{{ url_for('trainers') }}">Trainers</a></li>
+    <li><a href="{{ url_for('plans') }}" class="active">Plans</a></li>
+    <li><a href="{{ url_for('payments') }}">Payments</a></li>
+    <li><a href="{{ url_for('attendance') }}">Attendance</a></li>
+    <li><a href="{{ url_for('trainer_attendance') }}">Trainer Attendance</a></li>
+  </ul>
+  <div class="nav-user">
+    <a href="{{ url_for('admin_change_password') }}" class="btn btn-sm btn-secondary" style="margin-right:6px;">🔑 Password</a>
+    <a href="{{ url_for('logout') }}" class="btn btn-sm btn-ghost">Logout</a>
+  </div>
+</nav>
+
+<div class="container" style="max-width:600px;">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="page-header">
+    <div>
+      <h1>✏️ Edit Plan</h1>
+      <p>Update the details for <strong>{{ plan.plan_name }}</strong></p>
+    </div>
+    <a href="{{ url_for('plans') }}" class="btn btn-secondary">← Back to Plans</a>
+  </div>
+
+  <div class="card">
+    <form method="POST" action="{{ url_for('edit_plan', plan_id=plan.id) }}">
+
+      <div class="form-group">
+        <label>Plan Name</label>
+        <input type="text" name="plan_name" value="{{ plan.plan_name }}" required placeholder="e.g. Basic Plan">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Duration (months)</label>
+          <input type="number" name="duration_months" value="{{ plan.duration_months }}" min="1" max="24" required>
+        </div>
+        <div class="form-group">
+          <label>Price ($)</label>
+          <input type="number" name="price" value="{{ plan.price }}" min="0" step="0.01" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Description</label>
+        <textarea name="description" rows="2" required placeholder="Brief description of this plan">{{ plan.description }}</textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Features</label>
+        <p style="font-size:12px; color:var(--muted); margin-bottom:6px;">
+          Separate each feature with a pipe <code>|</code> symbol. Example: <code>✓ Gym Access|✓ Locker|✓ Trainer</code>
+        </p>
+        <textarea name="features" rows="5" required placeholder="✓ Feature 1|✓ Feature 2|✓ Feature 3">{{ plan.features }}</textarea>
+      </div>
+
+      <!-- Live preview -->
+      <div style="margin-bottom:20px;">
+        <div style="font-size:12px; color:var(--muted); margin-bottom:8px; font-weight:600;">PREVIEW</div>
+        <div style="background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:16px;">
+          <div id="preview-name" style="font-weight:800; font-size:16px; margin-bottom:6px;">{{ plan.plan_name }}</div>
+          <div id="preview-price" style="font-size:24px; font-weight:800; color:var(--accent); margin-bottom:10px;">
+            ${{ plan.price|int }}<span style="font-size:13px; font-weight:400; color:var(--muted);">/{{ plan.duration_months }}mo</span>
+          </div>
+          <div id="preview-features">
+            {% for feat in plan.features.split('|') %}
+            <div style="font-size:12px; color:var(--muted); padding:3px 0; border-bottom:1px solid var(--border);">{{ feat }}</div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="form-buttons">
+        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+        <a href="{{ url_for('plans') }}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// Live preview update
+function updatePreview() {
+  const name     = document.querySelector('[name="plan_name"]').value;
+  const price    = document.querySelector('[name="price"]').value;
+  const duration = document.querySelector('[name="duration_months"]').value;
+  const features = document.querySelector('[name="features"]').value;
+
+  document.getElementById('preview-name').textContent = name || 'Plan Name';
+  document.getElementById('preview-price').innerHTML =
+    `$${parseInt(price) || 0}<span style="font-size:13px; font-weight:400; color:var(--muted);">/${duration || 1}mo</span>`;
+
+  const featList = features.split('|').filter(f => f.trim());
+  document.getElementById('preview-features').innerHTML = featList
+    .map(f => `<div style="font-size:12px; color:var(--muted); padding:3px 0; border-bottom:1px solid var(--border);">${f.trim()}</div>`)
+    .join('');
+}
+
+// Attach listeners to all inputs
+document.querySelectorAll('input, textarea').forEach(el => {
+  el.addEventListener('input', updatePreview);
+});
+</script>
+</body>
+</html>

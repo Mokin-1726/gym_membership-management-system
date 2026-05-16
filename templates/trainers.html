@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trainers — Gym Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand">💪 IRONCORE</div>
+  <ul class="nav-menu">
+    <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+    <li><a href="{{ url_for('members') }}">Members</a></li>
+    <li><a href="{{ url_for('trainers') }}" class="active">Trainers</a></li>
+    <li><a href="{{ url_for('plans') }}">Plans</a></li>
+    <li><a href="{{ url_for('payments') }}">Payments</a></li>
+    <li><a href="{{ url_for('attendance') }}">Attendance</a></li>
+    <li><a href="{{ url_for('trainer_attendance') }}">Trainer Attendance</a></li>
+  </ul>
+  <div class="nav-user">
+    <a href="{{ url_for('admin_change_password') }}" class="btn btn-sm btn-secondary" style="margin-right:6px;">🔑 Password</a><a href="{{ url_for('logout') }}" class="btn btn-sm btn-ghost">Logout</a>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1>Trainer Hub</h1>
+      <p>Staff management & performance analytics</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('addTrainerModal')">+ Add Trainer</button>
+  </div>
+
+  <!-- Trainer cards -->
+  <div class="trainer-grid">
+    {% for t in trainers %}
+    <div class="trainer-card">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div class="trainer-avatar">{{ t.full_name[0] }}</div>
+        <span class="badge badge-active">Active</span>
+      </div>
+      <div class="trainer-name">{{ t.full_name }}</div>
+      <div class="trainer-spec">{{ t.specialization }}</div>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">{{ t.bio or '' }}</p>
+
+      <!-- Rating bars -->
+      <div>
+        <div class="rating-bar-wrap">
+          <div class="rating-label"><span>Overall Rating</span><span>{{ "%.1f"|format(t.avg_rating or 0) }}/5</span></div>
+          <div class="rating-bar"><div class="rating-fill" style="width:{{ ((t.avg_rating or 0)/5*100)|int }}%"></div></div>
+        </div>
+      </div>
+
+      <div class="trainer-stats">
+        <div class="t-stat">
+          <div class="t-stat-num">{{ t.active_members }}</div>
+          <div class="t-stat-label">Members</div>
+        </div>
+        <div class="t-stat">
+          <div class="t-stat-num">{{ t.experience_years }}y</div>
+          <div class="t-stat-label">Exp.</div>
+        </div>
+        <div class="t-stat">
+          <div class="t-stat-num">{{ "%.1f"|format(t.avg_rating or 0) }}★</div>
+          <div class="t-stat-label">Rating</div>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-top:14px;">
+        <a href="{{ url_for('trainer_analytics', trainer_id=t.id) }}" class="btn btn-sm btn-secondary" style="flex:1; justify-content:center;">📊 Analytics</a>
+        <a href="{{ url_for('delete_trainer', trainer_id=t.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Delete trainer?')">Delete</a>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty-state" style="grid-column:1/-1">
+      <div class="icon">🏋️</div><p>No trainers yet. Add one to get started.</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Performance Leaderboard -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title">🏆 Trainer Leaderboard</span>
+      <span style="font-size:12px; color:var(--muted);">Ranked by member feedback</span>
+    </div>
+    <div style="padding:24px;">
+      {% for r in ranking %}
+      <div class="leaderboard-item">
+        <div class="rank rank-{{ loop.index if loop.index <= 3 else '' }}">
+          {% if loop.index == 1 %}🥇{% elif loop.index == 2 %}🥈{% elif loop.index == 3 %}🥉{% else %}{{ loop.index }}{% endif %}
+        </div>
+        <div class="trainer-avatar" style="width:44px;height:44px;font-size:18px;margin-bottom:0;">{{ r.full_name[0] }}</div>
+        <div style="flex:1;">
+          <div style="font-weight:700; font-size:14px;">{{ r.full_name }}</div>
+          <div style="font-size:11px; color:var(--accent); font-weight:600;">{{ r.specialization }}</div>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(4,80px); gap:8px; text-align:center;">
+          {% set cats = [('Overall','avg_overall'), ('Punctuality','avg_punctuality'), ('Knowledge','avg_knowledge'), ('Motivation','avg_motivation')] %}
+          {% for label, key in cats %}
+          <div>
+            <div style="font-family:var(--heading-font); font-size:20px; color:var(--accent);">{{ "%.1f"|format(r[key] or 0) }}</div>
+            <div style="font-size:10px; color:var(--muted);">{{ label }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div style="text-align:right; min-width:80px;">
+          <div style="font-size:11px; color:var(--muted);">{{ r.total_reviews }} reviews</div>
+          <div style="font-size:11px; color:var(--muted);">{{ r.active_members }} members</div>
+          <a href="{{ url_for('trainer_analytics', trainer_id=r.id) }}" class="btn btn-sm btn-secondary" style="margin-top:6px;">View</a>
+        </div>
+      </div>
+      {% else %}
+      <div class="empty-state"><div class="icon">📊</div><p>No feedback data yet</p></div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Add Trainer Modal -->
+<div id="addTrainerModal" class="modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('addTrainerModal')">✕</button>
+    <div class="modal-title">Add New Trainer</div>
+    <form method="POST" action="{{ url_for('add_trainer') }}">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" name="full_name" required>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="tel" name="phone" required>
+        </div>
+        <div class="form-group">
+          <label>Specialization</label>
+          <input type="text" name="specialization" placeholder="Strength, Yoga, HIIT…" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Years of Experience</label>
+        <input type="number" name="experience_years" min="0" value="1" required>
+      </div>
+      <div class="form-group">
+        <label>Bio / Description</label>
+        <textarea name="bio" rows="3" placeholder="Brief description of the trainer's background…"></textarea>
+      </div>
+      <div class="form-buttons">
+        <button type="submit" class="btn btn-primary">Add Trainer</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('addTrainerModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+window.addEventListener('click', e => {
+  document.querySelectorAll('.modal.open').forEach(m => { if (e.target === m) m.classList.remove('open'); });
+});
+</script>
+</body>
+</html>

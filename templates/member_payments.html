@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Payments — Member Portal</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="member-portal">
+<nav class="navbar">
+  <div class="nav-brand">💪 IRONCORE</div>
+  <ul class="nav-menu">
+    <li><a href="{{ url_for('member_dashboard') }}">My Dashboard</a></li>
+    <li><a href="{{ url_for('member_profile') }}">My Profile</a></li>
+    <li><a href="{{ url_for('member_attendance') }}">Attendance</a></li>
+    <li><a href="{{ url_for('member_payments') }}" class="active">💳 Payments</a></li>
+    <li><a href="{{ url_for('member_change_password') }}">🔑 Change Password</a></li>
+  </ul>
+  <div class="nav-user">
+    <div class="nav-avatar" style="background:var(--blue);">{{ member.full_name[0] | upper }}</div>
+    <span>{{ member.full_name }}</span>
+    <a href="{{ url_for('member_logout') }}" class="btn btn-sm btn-ghost" style="margin-left:8px;">Logout</a>
+  </div>
+</nav>
+
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="page-header">
+    <div>
+      <h1>My Payments</h1>
+      <p>View payment history and renew your membership</p>
+    </div>
+    <button class="btn btn-primary" style="background:var(--blue);" onclick="openModal('payModal')">
+      💳 Make Payment
+    </button>
+  </div>
+
+  <!-- Current Membership Status -->
+  <div class="card" style="margin-bottom:24px; border-left:4px solid var(--blue);">
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:20px;">
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;">Current Plan</div>
+        <div style="font-weight:700; font-size:20px; color:var(--blue);">{{ member.plan_name or '— No Plan —' }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;">Status</div>
+        <span class="badge badge-{{ member.status }}" style="font-size:14px; padding:6px 14px;">{{ member.status.capitalize() }}</span>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;">Expires On</div>
+        <div style="font-weight:700; font-size:16px;">{{ member.end_date }}</div>
+      </div>
+      <div style="display:flex; align-items:center;">
+        <button class="btn btn-primary" style="background:var(--blue);" onclick="openModal('payModal')">🔄 Renew / Change Plan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Available Plans -->
+  <div class="section-title" style="font-size:18px; margin-bottom:16px;">Available Plans</div>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin-bottom:28px;">
+    {% for p in plans %}
+    <div class="card" style="border:2px solid {% if member.plan_id == p.id %}var(--blue){% else %}var(--border){% endif %}; text-align:center;">
+      {% if member.plan_id == p.id %}
+      <div style="background:var(--blue); color:white; font-size:11px; font-weight:700; padding:4px 12px; border-radius:20px; display:inline-block; margin-bottom:10px;">
+        CURRENT PLAN
+      </div>
+      {% endif %}
+      <div style="font-weight:800; font-size:16px; margin-bottom:8px;">{{ p.plan_name }}</div>
+      <div style="font-size:32px; font-weight:800; color:var(--blue); margin-bottom:4px;">
+        ${{ p.price|int }}<span style="font-size:14px; font-weight:400; color:var(--muted);">/{{ p.duration_months }}mo</span>
+      </div>
+      <div style="margin:12px 0;">
+        {% for feat in p.features.split('|') %}
+        <div style="font-size:12px; color:var(--muted); padding:3px 0; border-bottom:1px solid var(--border);">{{ feat }}</div>
+        {% endfor %}
+      </div>
+      <button class="btn btn-primary btn-sm" style="background:var(--blue); width:100%; margin-top:8px;"
+              onclick="selectPlan({{ p.id }}, '{{ p.plan_name }}', {{ p.price }})">
+        Select Plan →
+      </button>
+    </div>
+    {% else %}
+    <div class="empty-state" style="grid-column:1/-1">
+      <div class="icon">📋</div>
+      <p>No plans available. Please contact admin.</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Payment History -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title">💳 Payment History</span>
+      <span style="font-size:12px; color:var(--muted);">{{ payments|length }} total payments</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Transaction ID</th>
+          <th>Plan</th>
+          <th>Amount</th>
+          <th>Method</th>
+          <th>Date</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in payments %}
+        <tr>
+          <td class="mono" style="font-size:12px; color:var(--muted);">{{ p.transaction_id or '—' }}</td>
+          <td style="font-weight:600;">{{ p.plan_name }}</td>
+          <td style="color:var(--green); font-weight:700;">${{ "%.2f"|format(p.amount) }}</td>
+          <td>{{ p.payment_method.capitalize() }}</td>
+          <td>{{ p.payment_date }}</td>
+          <td>
+            <span class="badge badge-{% if p.status=='completed' %}active{% else %}{{ p.status }}{% endif %}">
+              {{ p.status.capitalize() }}
+            </span>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">
+          <div class="empty-state">
+            <div class="icon">💳</div>
+            <p>No payments yet. Click "Make Payment" to get started!</p>
+          </div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Make Payment Modal -->
+<div id="payModal" class="modal">
+  <div class="modal-box" style="max-width:460px;">
+    <button class="modal-close" onclick="closeModal('payModal')">✕</button>
+    <div class="modal-title">💳 Make Payment</div>
+    <form method="POST" action="{{ url_for('member_make_payment') }}" onsubmit="return validatePayment()">
+      <div class="form-group">
+        <label>Select Plan</label>
+        <select name="plan_id" id="plan_select" required onchange="updatePrice()">
+          <option value="">— Choose a Plan —</option>
+          {% for p in plans %}
+          <option value="{{ p.id }}" data-price="{{ p.price }}" data-name="{{ p.plan_name }}">
+            {{ p.plan_name }} — ${{ p.price }}/{{ p.duration_months }}mo
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div id="price-preview" style="display:none; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:16px; text-align:center;">
+        <div style="font-size:12px; color:var(--muted);">Amount to Pay</div>
+        <div id="price-amount" style="font-size:32px; font-weight:800; color:var(--blue);">$0</div>
+        <div id="price-plan" style="font-size:13px; color:var(--muted);"></div>
+      </div>
+
+      <div class="form-group">
+        <label>Payment Method</label>
+        <select name="payment_method" required>
+          <option value="">— Select Method —</option>
+          <option value="cash">💵 Cash</option>
+          <option value="card">💳 Card</option>
+          <option value="online">🌐 Online Transfer</option>
+          <option value="upi">📱 UPI</option>
+        </select>
+      </div>
+
+      <div style="font-size:12px; color:var(--muted); background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:16px;">
+        ✅ Your membership will be automatically updated after payment.
+      </div>
+
+      <div class="form-buttons">
+        <button type="submit" class="btn btn-primary" style="background:var(--blue);">Confirm Payment 💳</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('payModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+window.addEventListener('click', e => {
+  document.querySelectorAll('.modal.open').forEach(m => { if (e.target === m) m.classList.remove('open'); });
+});
+function selectPlan(id, name, price) {
+  openModal('payModal');
+  document.getElementById('plan_select').value = id;
+  updatePrice();
+}
+function updatePrice() {
+  const sel = document.getElementById('plan_select');
+  const opt = sel.options[sel.selectedIndex];
+  const preview = document.getElementById('price-preview');
+  if (sel.value) {
+    preview.style.display = 'block';
+    document.getElementById('price-amount').textContent = '$' + parseFloat(opt.dataset.price).toFixed(2);
+    document.getElementById('price-plan').textContent = opt.dataset.name;
+  } else {
+    preview.style.display = 'none';
+  }
+}
+function validatePayment() {
+  if (!document.getElementById('plan_select').value) {
+    alert('Please select a plan.');
+    return false;
+  }
+  return true;
+}
+</script>
+</body>
+</html>

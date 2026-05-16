@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Gym Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand">💪 IRONCORE</div>
+  <ul class="nav-menu">
+    <li><a href="{{ url_for('dashboard') }}" class="active">Dashboard</a></li>
+    <li><a href="{{ url_for('members') }}">Members</a></li>
+    <li><a href="{{ url_for('trainers') }}">Trainers</a></li>
+    <li><a href="{{ url_for('plans') }}">Plans</a></li>
+    <li><a href="{{ url_for('payments') }}">Payments</a></li>
+    <li><a href="{{ url_for('attendance') }}">Attendance</a></li>
+    <li><a href="{{ url_for('trainer_attendance') }}">Trainer Attendance</a></li>
+  </ul>
+  <div class="nav-user">
+    <div class="nav-avatar">{{ admin_name[0] | upper }}</div>
+    <span>{{ admin_name }}</span>
+    <a href="{{ url_for('logout') }}" class="btn btn-sm btn-ghost" style="margin-left:8px;">Logout</a>
+  </div>
+</nav>
+
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="page-header">
+    <div>
+      <h1>Dashboard</h1>
+      <p>Welcome back, {{ admin_name }} — here's what's happening today</p>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Members</div>
+      <div class="stat-number">{{ stats.total_members }}</div>
+      <div class="stat-sub">{{ stats.active_members }} currently active</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Active Plans</div>
+      <div class="stat-number">{{ stats.total_plans }}</div>
+      <div class="stat-sub">Membership types available</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Trainers</div>
+      <div class="stat-number">{{ stats.total_trainers }}</div>
+      <div class="stat-sub">Active coaching staff</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Monthly Revenue</div>
+      <div class="stat-number">${{ "%.0f"|format(stats.monthly_revenue) }}</div>
+      <div class="stat-sub">This month's earnings</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Expiring Soon</div>
+      <div class="stat-number" style="color: var(--yellow);">{{ stats.expiring_soon }}</div>
+      <div class="stat-sub">Memberships in next 7 days</div>
+    </div>
+  </div>
+
+  <!-- Recent members -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title">Recent Registrations</span>
+      <a href="{{ url_for('members') }}" class="btn btn-sm btn-secondary">View All →</a>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Plan</th>
+          <th>Joined</th>
+          <th>Expires</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in recent_members %}
+        <tr>
+          <td class="mono">M{{ "%03d"|format(m.id) }}</td>
+          <td>{{ m.full_name }}</td>
+          <td>{{ m.plan_name or '—' }}</td>
+          <td>{{ m.join_date }}</td>
+          <td>{{ m.end_date }}</td>
+          <td><span class="badge badge-{{ m.status }}">{{ m.status.capitalize() }}</span></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6"><div class="empty-state"><div class="icon">👤</div><p>No members yet</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Quick links -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-top:24px;">
+    <a href="{{ url_for('members') }}" class="card" style="text-decoration:none; display:flex; align-items:center; gap:12px; transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      <span style="font-size:28px;">👥</span>
+      <div>
+        <div style="font-weight:700; font-size:13px;">Manage Members</div>
+        <div style="font-size:11px; color:var(--muted);">Add, edit, delete</div>
+      </div>
+    </a>
+    <a href="{{ url_for('trainers') }}" class="card" style="text-decoration:none; display:flex; align-items:center; gap:12px; transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      <span style="font-size:28px;">🏋️</span>
+      <div>
+        <div style="font-weight:700; font-size:13px;">Trainer Analytics</div>
+        <div style="font-size:11px; color:var(--muted);">Performance & rankings</div>
+      </div>
+    </a>
+    <a href="{{ url_for('payments') }}" class="card" style="text-decoration:none; display:flex; align-items:center; gap:12px; transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      <span style="font-size:28px;">💳</span>
+      <div>
+        <div style="font-weight:700; font-size:13px;">Payments</div>
+        <div style="font-size:11px; color:var(--muted);">Revenue & records</div>
+      </div>
+    </a>
+    <a href="{{ url_for('plans') }}" class="card" style="text-decoration:none; display:flex; align-items:center; gap:12px; transition:border-color .2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+      <span style="font-size:28px;">📋</span>
+      <div>
+        <div style="font-weight:700; font-size:13px;">Manage Plans</div>
+        <div style="font-size:11px; color:var(--muted);">Pricing & features</div>
+      </div>
+    </a>
+  </div>
+</div>
+</body>
+</html>

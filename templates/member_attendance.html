@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Attendance — Gym Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-top:16px; }
+    .cal-header { text-align:center; font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; padding:6px 0; }
+    .cal-day { aspect-ratio:1; display:grid; place-items:center; border-radius:8px; font-size:13px; font-weight:600; background:var(--surface2); border:1px solid var(--border); color:var(--muted); }
+    .cal-day.attended { background:rgba(34,197,94,.2); border-color:var(--green); color:var(--green); }
+    .cal-day.today { border-color:var(--blue); color:var(--blue); }
+    .cal-day.attended.today { background:rgba(34,197,94,.3); border-color:var(--green); color:var(--green); }
+    .cal-day.empty { background:transparent; border-color:transparent; }
+    .streak-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(234,179,8,.15); border:1px solid rgba(234,179,8,.3); color:var(--yellow); padding:6px 14px; border-radius:20px; font-size:13px; font-weight:700; }
+    .checkin-active { background:rgba(34,197,94,.08); border:2px solid var(--green); border-radius:12px; padding:16px 20px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .checkin-pulse { width:12px; height:12px; background:var(--green); border-radius:50%; animation:pulse 1.5s infinite; flex-shrink:0; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+  </style>
+</head>
+<body class="member-portal">
+<nav class="navbar">
+  <div class="nav-brand">💪 IRONCORE</div>
+  <ul class="nav-menu">
+    <li><a href="{{ url_for('member_dashboard') }}">My Dashboard</a></li>
+    <li><a href="{{ url_for('member_profile') }}">My Profile</a></li>
+    <li><a href="{{ url_for('member_attendance') }}" class="active">Attendance</a></li>
+    <li><a href="{{ url_for('member_payments') }}">💳 Payments</a></li>
+    <li><a href="{{ url_for('member_change_password') }}">🔑 Change Password</a></li>
+  </ul>
+  <div class="nav-user">
+    <div class="nav-avatar" style="background:var(--blue);">{{ session.full_name[0] | upper }}</div>
+    <span>{{ session.full_name }}</span>
+    <a href="{{ url_for('member_logout') }}" class="btn btn-sm btn-ghost" style="margin-left:8px;">Logout</a>
+  </div>
+</nav>
+
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="page-header">
+    <div>
+      <h1>My Attendance</h1>
+      <p>Track your gym visits and consistency</p>
+    </div>
+    {% if stats.active_checkin_id %}
+    <a href="{{ url_for('member_checkout', attendance_id=stats.active_checkin_id) }}"
+       class="btn btn-primary" style="background:var(--green);"
+       onclick="return confirm('Check out now?')">🚪 Check Out Now</a>
+    {% else %}
+    <form method="POST" action="{{ url_for('member_checkin') }}" style="display:inline;">
+      <input type="hidden" name="notes" value="Self check-in">
+      <button type="submit" class="btn btn-primary" style="background:var(--blue);">✅ Check In Now</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <!-- Active session banner -->
+  {% if stats.active_checkin_id %}
+  <div class="checkin-active">
+    <div class="checkin-pulse"></div>
+    <div style="flex:1;">
+      <div style="font-weight:700; color:var(--green); font-size:15px;">You are currently checked in!</div>
+      <div style="font-size:12px; color:var(--muted); margin-top:2px;">Session in progress. Click Check Out when you are done.</div>
+    </div>
+    <a href="{{ url_for('member_checkout', attendance_id=stats.active_checkin_id) }}"
+       class="btn btn-primary" style="background:var(--green);"
+       onclick="return confirm('Check out now?')">🚪 Check Out</a>
+  </div>
+  {% endif %}
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total Visits</div>
+      <div class="stat-number" style="color:var(--blue);">{{ stats.total_visits }}</div>
+      <div class="stat-sub">All time</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">This Month</div>
+      <div class="stat-number" style="color:var(--blue);">{{ stats.this_month }}</div>
+      <div class="stat-sub">{{ current_month }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Time</div>
+      <div class="stat-number" style="color:var(--blue);">{{ stats.total_hours }}</div>
+      <div class="stat-sub">Hours at the gym ({{ stats.total_minutes }} min)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">This Month Time</div>
+      <div class="stat-number" style="color:var(--blue);">{{ stats.this_month_mins }}</div>
+      <div class="stat-sub">Minutes in {{ current_month }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Session</div>
+      <div class="stat-number" style="color:var(--blue);">{{ stats.this_month_avg if stats.this_month_avg is defined else stats.avg_duration }}</div>
+      <div class="stat-sub">Minutes per visit (this month)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Last Visit</div>
+      <div class="stat-number" style="font-size:18px; color:var(--blue);">{{ stats.last_visit or '—' }}</div>
+      <div class="stat-sub">Most recent check-in</div>
+    </div>
+  </div>
+
+  <!-- Calendar + Chart -->
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:28px;">
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <div class="section-title" style="font-size:18px; border:none; padding:0; margin:0;">📅 {{ current_month }}</div>
+        <div class="streak-badge">🔥 {{ attended_dates|length }} days</div>
+      </div>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:4px;">
+        <span style="color:var(--green);">■</span> Attended &nbsp;
+        <span style="color:var(--blue);">■</span> Today
+      </p>
+      <div class="calendar-grid">
+        {% for day in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+        <div class="cal-header">{{ day }}</div>
+        {% endfor %}
+        <script>
+        (function() {
+          const year  = {{ current_year }};
+          const month = {{ current_month_num }};
+          const attended = {{ attended_dates | tojson }};
+          const today = new Date().toISOString().split('T')[0];
+          const firstDay = new Date(year, month - 1, 1).getDay();
+          const startOffset = (firstDay === 0) ? 6 : firstDay - 1;
+          const daysInMonth = new Date(year, month, 0).getDate();
+          let html = '';
+          for (let i = 0; i < startOffset; i++) html += '<div class="cal-day empty"></div>';
+          for (let d = 1; d <= daysInMonth; d++) {
+            const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            let cls = 'cal-day';
+            if (attended.includes(dateStr)) cls += ' attended';
+            if (dateStr === today) cls += ' today';
+            html += `<div class="${cls}">${d}</div>`;
+          }
+          document.currentScript.insertAdjacentHTML('afterend', html);
+        })();
+        </script>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title" style="font-size:18px; border:none; padding:0; margin-bottom:16px;">📊 Weekly Visits</div>
+      {% if weekly %}
+      <canvas id="weeklyChart" height="220"></canvas>
+      {% else %}
+      <div class="empty-state"><div class="icon">📊</div><p>No data yet. Start checking in!</p></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Attendance History -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title">Visit History</span>
+      <span style="font-size:12px; color:var(--muted);">{{ records|length }} total visits</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Check In</th>
+          <th>Check Out</th>
+          <th>Duration</th>
+          <th>Notes</th>
+          <th>Marked By</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr>
+          <td style="font-weight:600;">{{ r.date }}</td>
+          <td class="mono">{{ r.check_in.strftime('%I:%M %p') if r.check_in else '—' }}</td>
+          <td class="mono">
+            {% if r.check_out %}
+              {{ r.check_out.strftime('%I:%M %p') }}
+            {% else %}
+              <span style="color:var(--green); font-size:12px; font-weight:600;">Still inside 🟢</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if r.duration_minutes %}
+              <span style="font-weight:700; color:var(--blue);">{{ r.duration_minutes }} min</span>
+            {% elif r.check_in and not r.check_out %}
+              <span style="color:var(--green); font-size:12px;">In progress…</span>
+            {% else %}—{% endif %}
+          </td>
+          <td style="font-size:12px; color:var(--muted);">{{ r.notes or '—' }}</td>
+          <td>
+            <span class="badge badge-{% if r.marked_by == 'admin' %}active{% else %}pending{% endif %}">
+              {{ r.marked_by.capitalize() }}
+            </span>
+          </td>
+          <td>
+            {% if not r.check_out %}
+            <a href="{{ url_for('member_checkout', attendance_id=r.id) }}"
+               class="btn btn-sm btn-secondary"
+               onclick="return confirm('Check out now?')">🚪 Check Out</a>
+            {% else %}
+            <span style="font-size:12px; color:var(--muted);">Done ✓</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7">
+          <div class="empty-state">
+            <div class="icon">📋</div>
+            <p>No attendance records yet. Click "Check In Now" to get started!</p>
+          </div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+{% if weekly %}
+const weeklyData = {{ weekly | tojson }};
+const sorted = weeklyData.slice().reverse();
+const ctx = document.getElementById('weeklyChart').getContext('2d');
+new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: sorted.map(d => d.week_start || d.week_key),
+    datasets: [{
+      label: 'Visits per week',
+      data: sorted.map(d => d.total_visits),
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59,130,246,.15)',
+      tension: .4, fill: true,
+      pointRadius: 5, pointBackgroundColor: '#3b82f6',
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { labels: { color: '#64748b' } } },
+    scales: {
+      x: { ticks: { color: '#64748b' }, grid: { color: '#2a2f42' } },
+      y: { ticks: { color: '#64748b', stepSize: 1 }, grid: { color: '#2a2f42' }, beginAtZero: true }
+    }
+  }
+});
+{% endif %}
+</script>
+</body>
+</html>

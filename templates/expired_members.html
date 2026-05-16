@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expired Members — Gym Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand">💪 IRONCORE</div>
+  <ul class="nav-menu">
+    <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+    <li><a href="{{ url_for('members') }}" class="active">Members</a></li>
+    <li><a href="{{ url_for('trainers') }}">Trainers</a></li>
+    <li><a href="{{ url_for('plans') }}">Plans</a></li>
+    <li><a href="{{ url_for('payments') }}">Payments</a></li>
+    <li><a href="{{ url_for('attendance') }}">Attendance</a></li>
+    <li><a href="{{ url_for('trainer_attendance') }}">Trainer Attendance</a></li>
+  </ul>
+  <div class="nav-user">
+    <a href="{{ url_for('admin_change_password') }}" class="btn btn-sm btn-secondary" style="margin-right:6px;">🔑 Password</a>
+    <a href="{{ url_for('logout') }}" class="btn btn-sm btn-ghost">Logout</a>
+  </div>
+</nav>
+
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="page-header">
+    <div>
+      <h1>Expired Members</h1>
+      <p>Members whose membership has expired — {{ expired|length }} total</p>
+    </div>
+    <a href="{{ url_for('members') }}" class="btn btn-secondary">← All Members</a>
+  </div>
+
+  <!-- Summary card -->
+  <div class="card" style="margin-bottom:24px; border-left:4px solid var(--red);">
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:20px;">
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;">Total Expired</div>
+        <div style="font-size:32px; font-weight:800; color:var(--red);">{{ expired|length }}</div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;">Expired This Month</div>
+        <div style="font-size:32px; font-weight:800; color:var(--yellow);">
+          {{ expired | selectattr('days_expired', 'le', 30) | list | length }}
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px;">Expired Over 30 Days</div>
+        <div style="font-size:32px; font-weight:800; color:var(--muted);">
+          {{ expired | selectattr('days_expired', 'gt', 30) | list | length }}
+        </div>
+      </div>
+      <div style="display:flex; align-items:center;">
+        <div style="font-size:12px; color:var(--muted);">
+          Contact these members to renew their memberships.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Expired Members Table -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title">❌ Expired Memberships</span>
+      <span style="font-size:12px; color:var(--muted);">Sorted by most recently expired</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Phone</th>
+          <th>Plan</th>
+          <th>Trainer</th>
+          <th>Expired On</th>
+          <th>Days Expired</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in expired %}
+        <tr>
+          <td class="mono">M{{ "%03d"|format(m.id) }}</td>
+          <td style="font-weight:600;">{{ m.full_name }}</td>
+          <td style="font-size:12px; color:var(--muted);">{{ m.email }}</td>
+          <td>{{ m.phone }}</td>
+          <td>{{ m.plan_name or '—' }}</td>
+          <td>{{ m.trainer_name or '—' }}</td>
+          <td style="color:var(--red); font-weight:600;">{{ m.end_date }}</td>
+          <td>
+            <span style="font-weight:700; font-size:16px;
+              color:{% if m.days_expired <= 7 %}var(--yellow){% elif m.days_expired <= 30 %}var(--red){% else %}var(--muted){% endif %}">
+              {{ m.days_expired }} days
+            </span>
+          </td>
+          <td>
+            <button class="btn btn-sm btn-primary"
+                    onclick="renewMember({{ m.id }}, '{{ m.full_name }}')"
+                    style="margin-bottom:4px;">
+              🔄 Renew
+            </button>
+            <a href="{{ url_for('delete_member', member_id=m.id) }}"
+               class="btn btn-sm btn-danger"
+               onclick="return confirm('Delete {{ m.full_name }}?')">Delete</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9">
+          <div class="empty-state">
+            <div class="icon">✅</div>
+            <p>No expired memberships! All members are active.</p>
+          </div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Renew Modal -->
+<div id="renewModal" class="modal">
+  <div class="modal-box" style="max-width:420px;">
+    <button class="modal-close" onclick="closeModal('renewModal')">✕</button>
+    <div class="modal-title">🔄 Renew Membership</div>
+    <p id="renew-member-name" style="color:var(--muted); margin-bottom:16px;"></p>
+    <form method="POST" action="{{ url_for('add_payment') }}">
+      <input type="hidden" name="member_id" id="renew_member_id">
+      <div class="form-group">
+        <label>Select New Plan</label>
+        <select name="plan_id" id="renew_plan" required onchange="updateRenewPrice()">
+          <option value="">— Choose a Plan —</option>
+          {% for p in plans %}
+          <option value="{{ p.id }}" data-price="{{ p.price }}" data-months="{{ p.duration_months }}">
+            {{ p.plan_name }} — ${{ p.price }}/{{ p.duration_months }}mo
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div id="renew-price-preview" style="display:none; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:16px; text-align:center;">
+        <div style="font-size:12px; color:var(--muted);">Amount</div>
+        <div id="renew-price-amount" style="font-size:28px; font-weight:800; color:var(--accent);">$0</div>
+      </div>
+      <div class="form-group">
+        <label>Payment Method</label>
+        <select name="payment_method" required>
+          <option value="">Select</option>
+          <option value="cash">💵 Cash</option>
+          <option value="card">💳 Card</option>
+          <option value="online">🌐 Online</option>
+          <option value="upi">📱 UPI</option>
+        </select>
+      </div>
+      <input type="hidden" name="amount" id="renew_amount">
+      <input type="hidden" name="payment_date" id="renew_date">
+      <input type="hidden" name="transaction_id" id="renew_txn">
+      <input type="hidden" name="notes" value="Membership renewal">
+      <div class="form-buttons">
+        <button type="submit" class="btn btn-primary">Confirm Renewal ✅</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('renewModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+window.addEventListener('click', e => {
+  document.querySelectorAll('.modal.open').forEach(m => { if (e.target === m) m.classList.remove('open'); });
+});
+
+function renewMember(memberId, memberName) {
+  document.getElementById('renew_member_id').value = memberId;
+  document.getElementById('renew-member-name').textContent = 'Renewing membership for: ' + memberName;
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('renew_date').value = today;
+  document.getElementById('renew_txn').value = 'RNW' + Date.now();
+  openModal('renewModal');
+}
+
+function updateRenewPrice() {
+  const sel = document.getElementById('renew_plan');
+  const opt = sel.options[sel.selectedIndex];
+  const preview = document.getElementById('renew-price-preview');
+  if (sel.value) {
+    const price = parseFloat(opt.dataset.price);
+    preview.style.display = 'block';
+    document.getElementById('renew-price-amount').textContent = '$' + price.toFixed(2);
+    document.getElementById('renew_amount').value = price;
+  } else {
+    preview.style.display = 'none';
+  }
+}
+</script>
+</body>
+</html>

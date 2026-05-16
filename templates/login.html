@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if portal == 'member' %}Member Login{% else %}Admin Login{% endif %} — Gym Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">💪 IRONCORE</div>
+    <p class="login-subtitle">Gym Management System</p>
+
+    <!-- Portal Tabs -->
+    <div class="portal-tabs">
+      <a href="{{ url_for('login') }}" class="portal-tab {% if portal == 'admin' %}active{% endif %}">
+        👑 Admin
+      </a>
+      <a href="{{ url_for('member_login') }}" class="portal-tab {% if portal == 'member' %}active{% endif %}">
+        👤 Member
+      </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    {% if error %}
+      <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% if portal == 'admin' %}
+    <!-- ADMIN LOGIN -->
+    <form method="POST" action="{{ url_for('login') }}">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" name="username" placeholder="admin" required autofocus>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center;">
+        Login as Admin →
+      </button>
+    </form>
+    <p style="text-align:center; font-size:12px; color: var(--muted); margin-top:16px;">
+      Demo: <code style="font-family:var(--mono-font)">admin</code> / <code style="font-family:var(--mono-font)">admin123</code>
+    </p>
+
+    {% else %}
+    <!-- MEMBER LOGIN -->
+    <form method="POST" action="{{ url_for('member_login') }}">
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" name="email" placeholder="john@email.com" required autofocus>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="••••••••" required>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center; background:var(--blue);">
+        Login as Member →
+      </button>
+    </form>
+    <p style="text-align:center; font-size:13px; color: var(--muted); margin-top:20px;">
+      New member?
+      <a href="{{ url_for('member_register') }}" style="color:var(--blue); font-weight:600;">Create an account</a>
+    </p>
+    <p style="text-align:center; font-size:12px; color: var(--muted); margin-top:8px;">
+      Demo: <code style="font-family:var(--mono-font)">john@email.com</code> / <code style="font-family:var(--mono-font)">john123</code>
+    </p>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

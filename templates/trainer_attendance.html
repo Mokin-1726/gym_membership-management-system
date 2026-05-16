@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trainer Attendance — Gym Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-brand">💪 IRONCORE</div>
+  <ul class="nav-menu">
+    <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+    <li><a href="{{ url_for('members') }}">Members</a></li>
+    <li><a href="{{ url_for('trainers') }}">Trainers</a></li>
+    <li><a href="{{ url_for('plans') }}">Plans</a></li>
+    <li><a href="{{ url_for('payments') }}">Payments</a></li>
+    <li><a href="{{ url_for('attendance') }}">Attendance</a></li>
+    <li><a href="{{ url_for('trainer_attendance') }}" class="active">Trainer Attendance</a></li>
+  </ul>
+  <div class="nav-user">
+    <a href="{{ url_for('admin_change_password') }}" class="btn btn-sm btn-secondary" style="margin-right:6px;">🔑 Password</a>
+    <a href="{{ url_for('logout') }}" class="btn btn-sm btn-ghost">Logout</a>
+  </div>
+</nav>
+
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="page-header">
+    <div>
+      <h1>Trainer Attendance</h1>
+      <p>Track trainer check-ins and working hours</p>
+    </div>
+    <button class="btn btn-primary" onclick="openModal('markModal')">✅ Mark Trainer Attendance</button>
+  </div>
+
+  <!-- Stats - now with total hours -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Today's Check-ins</div>
+      <div class="stat-number">{{ stats.today_count }}</div>
+      <div class="stat-sub">Trainers present today</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Currently Working</div>
+      <div class="stat-number" style="color:var(--green);">{{ stats.currently_in }}</div>
+      <div class="stat-sub">Not yet checked out</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">This Month</div>
+      <div class="stat-number" style="color:var(--accent);">{{ stats.month_count }}</div>
+      <div class="stat-sub">Total trainer check-ins</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Hours</div>
+      <div class="stat-number" style="color:var(--accent);">{{ stats.total_hours }}</div>
+      <div class="stat-sub">{{ stats.total_mins }} min this month</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Session</div>
+      <div class="stat-number">{{ stats.avg_duration }}</div>
+      <div class="stat-sub">Minutes per session</div>
+    </div>
+  </div>
+
+  <!-- Monthly Summary Per Trainer -->
+  <div class="table-wrap" style="margin-bottom:24px;">
+    <div class="table-header">
+      <span class="table-title">📊 This Month's Trainer Summary</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Trainer</th>
+          <th>Specialization</th>
+          <th>Days Present</th>
+          <th>Total Hours</th>
+          <th>Avg Session</th>
+          <th>Attendance %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in summary %}
+        {% set pct = ((s.total_days / 26) * 100)|int if s.total_days else 0 %}
+        <tr>
+          <td style="font-weight:700;">{{ s.full_name }}</td>
+          <td style="color:var(--accent); font-size:12px;">{{ s.specialization }}</td>
+          <td>
+            <span style="font-family:var(--heading-font); font-size:22px; color:var(--accent);">{{ s.total_days or 0 }}</span>
+            <span style="font-size:11px; color:var(--muted);"> / 26 days</span>
+          </td>
+          <td>
+            <span style="font-weight:700; color:var(--blue);">{{ ((s.total_minutes or 0) // 60) }}</span>
+            <span style="font-size:11px; color:var(--muted);"> hrs</span>
+            <span style="font-size:11px; color:var(--muted);"> ({{ s.total_minutes or 0 }} min total)</span>
+          </td>
+          <td>{{ s.avg_duration or 0 }} min</td>
+          <td>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-weight:700; color:{% if pct >= 80 %}var(--green){% elif pct >= 50 %}var(--yellow){% else %}var(--red){% endif %}">{{ pct }}%</span>
+              <div class="rating-bar" style="width:80px;">
+                <div class="rating-fill" style="width:{{ pct }}%; background:{% if pct >= 80 %}var(--green){% elif pct >= 50 %}var(--yellow){% else %}var(--red){% endif %}"></div>
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">
+          <div class="empty-state"><div class="icon">🏋️</div><p>No trainer attendance recorded this month</p></div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Today's Live -->
+  <div class="table-wrap" style="margin-bottom:24px;">
+    <div class="table-header">
+      <span class="table-title">🟢 Today's Trainer Check-ins</span>
+      <span style="font-size:12px; color:var(--muted);">Live</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Trainer</th><th>Specialization</th><th>Check In</th>
+          <th>Check Out</th><th>Duration</th><th>Status</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in today %}
+        <tr>
+          <td style="font-weight:700;">{{ r.full_name }}</td>
+          <td style="color:var(--accent); font-size:12px;">{{ r.specialization }}</td>
+          <td class="mono">{{ r.check_in.strftime('%I:%M %p') if r.check_in else '—' }}</td>
+          <td class="mono">{{ r.check_out.strftime('%I:%M %p') if r.check_out else '—' }}</td>
+          <td>
+            {% if r.duration_minutes %}{{ r.duration_minutes }} min
+            {% elif r.check_in and not r.check_out %}<span style="color:var(--green); font-weight:600;">Working…</span>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if r.check_out %}<span class="badge badge-completed">Done</span>
+            {% else %}<span class="badge badge-active">Working</span>{% endif %}
+          </td>
+          <td>
+            {% if not r.check_out %}
+            <a href="{{ url_for('trainer_checkout', attendance_id=r.id) }}" class="btn btn-sm btn-secondary">Check Out</a>
+            {% endif %}
+            <a href="{{ url_for('delete_trainer_attendance', attendance_id=r.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Delete?')">✕</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7"><div class="empty-state"><div class="icon">🏋️</div><p>No trainer check-ins today</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Filter -->
+  <form method="GET" action="{{ url_for('trainer_attendance') }}" class="search-bar">
+    <input type="text" name="search" placeholder="Search by trainer name…" class="search-input" value="{{ search }}">
+    <input type="date" name="date" class="filter-select" value="{{ date_filter }}">
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    <a href="{{ url_for('trainer_attendance') }}" class="btn btn-ghost">Clear</a>
+  </form>
+
+  <!-- All Records -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title">All Trainer Attendance Records</span>
+      <span style="font-size:12px; color:var(--muted);">{{ records|length }} records</span>
+    </div>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Trainer</th><th>Date</th><th>Check In</th><th>Check Out</th><th>Duration</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr>
+          <td class="mono" style="color:var(--muted);">#{{ r.id }}</td>
+          <td style="font-weight:600;">{{ r.full_name }}</td>
+          <td>{{ r.date }}</td>
+          <td class="mono">{{ r.check_in.strftime('%I:%M %p') if r.check_in else '—' }}</td>
+          <td class="mono">{{ r.check_out.strftime('%I:%M %p') if r.check_out else '—' }}</td>
+          <td>{{ r.duration_minutes ~ ' min' if r.duration_minutes else '—' }}</td>
+          <td>
+            {% if not r.check_out %}
+            <a href="{{ url_for('trainer_checkout', attendance_id=r.id) }}" class="btn btn-sm btn-secondary">Check Out</a>
+            {% endif %}
+            <a href="{{ url_for('delete_trainer_attendance', attendance_id=r.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('Delete?')">✕</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7"><div class="empty-state"><div class="icon">📋</div><p>No records found</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Mark Trainer Attendance Modal -->
+<div id="markModal" class="modal">
+  <div class="modal-box" style="max-width:420px;">
+    <button class="modal-close" onclick="closeModal('markModal')">✕</button>
+    <div class="modal-title">✅ Mark Trainer Attendance</div>
+    <form method="POST" action="{{ url_for('mark_trainer_attendance') }}">
+      <div class="form-group">
+        <label>Select Trainer</label>
+        <select name="trainer_id" required>
+          <option value="">Choose a trainer…</option>
+          {% for t in trainers %}
+          <option value="{{ t.id }}">{{ t.full_name }} — {{ t.specialization }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Notes (optional)</label>
+        <input type="text" name="notes" placeholder="e.g. Morning shift">
+      </div>
+      <div class="form-buttons">
+        <button type="submit" class="btn btn-primary">Mark Present ✅</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('markModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+window.addEventListener('click', e => {
+  document.querySelectorAll('.modal.open').forEach(m => { if (e.target === m) m.classList.remove('open'); });
+});
+</script>
+</body>
+</html>

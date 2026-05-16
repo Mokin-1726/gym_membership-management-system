@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Dashboard — Gym Management</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body class="member-portal">
+<nav class="navbar">
+  <div class="nav-brand">💪 IRONCORE</div>
+  <ul class="nav-menu">
+    <li><a href="{{ url_for('member_dashboard') }}" class="active">My Dashboard</a></li>
+    <li><a href="{{ url_for('member_profile') }}">My Profile</a></li>
+    <li><a href="{{ url_for('member_attendance') }}">Attendance</a></li>
+    <li><a href="{{ url_for('member_payments') }}">💳 Payments</a></li>
+    <li><a href="{{ url_for('member_change_password') }}">🔑 Change Password</a></li>
+  </ul>
+  <div class="nav-user">
+    <div class="nav-avatar" style="background:var(--blue);">{{ member.full_name[0] | upper }}</div>
+    <span>{{ member.full_name }}</span>
+    <a href="{{ url_for('member_logout') }}" class="btn btn-sm btn-ghost" style="margin-left:8px;">Logout</a>
+  </div>
+</nav>
+
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert alert-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="page-header">
+    <div>
+      <h1>Welcome, {{ member.full_name.split()[0] }}!</h1>
+      <p>Track your progress and connect with your trainer</p>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn btn-secondary" onclick="openModal('perfModal')">📊 Log Performance</button>
+      {% if member.trainer_id %}
+      <button class="btn btn-primary" style="background:var(--blue);" onclick="openModal('feedbackModal')">⭐ Rate Trainer</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Membership info -->
+  <div style="display:grid; grid-template-columns: 2fr 1fr; gap:20px; margin-bottom:28px;">
+    <div class="stats-grid" style="margin:0;">
+      <div class="stat-card">
+        <div class="stat-label">Membership</div>
+        <div class="stat-number" style="font-size:28px;">{{ member.plan_name or '—' }}</div>
+        <div class="stat-sub">Expires: {{ member.end_date }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Status</div>
+        <div style="margin-top:8px;"><span class="badge badge-{{ member.status }}" style="font-size:16px; padding:8px 16px;">{{ member.status.capitalize() }}</span></div>
+        <div class="stat-sub" style="margin-top:8px;">Joined {{ member.join_date }}</div>
+      </div>
+      {% if perf_summary.total_weeks %}
+      <div class="stat-card">
+        <div class="stat-label">Workout Adherence</div>
+        <div class="stat-number">{{ perf_summary.avg_adherence or 0 }}%</div>
+        <div class="stat-sub">{{ perf_summary.total_workouts }} total workouts</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Cardio Minutes</div>
+        <div class="stat-number">{{ perf_summary.total_cardio }}</div>
+        <div class="stat-sub">{{ perf_summary.total_weeks }} weeks tracked</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Trainer card -->
+    <div class="card">
+      {% if member.trainer_name %}
+      <div class="section-title" style="font-size:16px; margin-bottom:16px;">Your Trainer</div>
+      <div class="trainer-avatar" style="margin-bottom:12px;">{{ member.trainer_name[0] }}</div>
+      <div style="font-weight:700; font-size:16px;">{{ member.trainer_name }}</div>
+      <p style="font-size:12px; color:var(--muted); margin-top:8px;">{{ member.fitness_goal or 'No goal set yet' }}</p>
+      <button class="btn btn-primary btn-sm" style="background:var(--blue); margin-top:14px;" onclick="openModal('feedbackModal')">Leave Feedback ⭐</button>
+      {% else %}
+      <div class="empty-state" style="padding:30px 10px;">
+        <div class="icon">🏋️</div>
+        <p>No trainer assigned yet.</p>
+        <a href="{{ url_for('member_profile') }}" class="btn btn-sm btn-secondary" style="margin-top:12px;">Update Profile</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Performance chart -->
+  {% if perf_history %}
+  <div class="chart-grid" style="margin-bottom:28px;">
+    <div class="chart-card">
+      <div class="chart-title">Workout Completion</div>
+      <canvas id="workoutChart" height="160"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Weight Progress</div>
+      <canvas id="weightChart" height="160"></canvas>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Performance history table -->
+  <div class="table-wrap" style="margin-bottom:28px;">
+    <div class="table-header">
+      <span class="table-title">📈 My Performance Log</span>
+      <button class="btn btn-sm btn-primary" style="background:var(--blue);" onclick="openModal('perfModal')">+ Add Entry</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Week</th>
+          <th>Workouts Done</th>
+          <th>Workouts Planned</th>
+          <th>Adherence</th>
+          <th>Cardio (min)</th>
+          <th>Strength</th>
+          <th>Weight (kg)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in perf_history %}
+        <tr>
+          <td class="mono">{{ p.week_start }}</td>
+          <td>{{ p.workouts_completed }}</td>
+          <td>{{ p.workouts_planned }}</td>
+          <td>
+            {% set adherence = (p.workouts_completed / p.workouts_planned * 100)|int if p.workouts_planned else 0 %}
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-weight:700; color:{% if adherence >= 80 %}var(--green){% elif adherence >= 50 %}var(--yellow){% else %}var(--red){% endif %}">{{ adherence }}%</span>
+              <div class="rating-bar" style="width:60px;"><div class="rating-fill" style="width:{{ adherence }}%; background:{% if adherence >= 80 %}var(--green){% elif adherence >= 50 %}var(--yellow){% else %}var(--red){% endif %}"></div></div>
+            </div>
+          </td>
+          <td>{{ p.cardio_minutes }}</td>
+          <td>{{ p.strength_sessions }}</td>
+          <td>{% if p.weight_kg %}{{ p.weight_kg }} kg{% else %}—{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7">
+          <div class="empty-state"><div class="icon">📈</div><p>No performance entries yet. Click "+ Add Entry" to get started!</p></div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Feedback given -->
+  <div class="table-wrap">
+    <div class="table-header">
+      <span class="table-title">⭐ Feedback I've Submitted</span>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Trainer</th><th>Week</th><th>Overall</th><th>Punctuality</th><th>Knowledge</th><th>Motivation</th><th>Comments</th></tr>
+      </thead>
+      <tbody>
+        {% for f in feedback_given %}
+        <tr>
+          <td style="font-weight:600;">{{ f.trainer_name }}</td>
+          <td class="mono">{{ f.week_start }}</td>
+          <td>{{ '★' * f.rating }}{{ '☆' * (5 - f.rating) }}</td>
+          <td>{{ f.punctuality }}/5</td>
+          <td>{{ f.knowledge }}/5</td>
+          <td>{{ f.motivation }}/5</td>
+          <td style="font-size:12px; color:var(--muted);">{{ f.comments or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7">
+          <div class="empty-state"><div class="icon">💬</div><p>No feedback submitted yet</p></div>
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Log Performance Modal -->
+<div id="perfModal" class="modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('perfModal')">✕</button>
+    <div class="modal-title">📊 Log Weekly Performance</div>
+    <form method="POST" action="{{ url_for('add_performance') }}">
+      <div class="form-group">
+        <label>Week Starting (Monday)</label>
+        <input type="date" name="week_start" required id="weekInput">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Workouts Completed</label>
+          <input type="number" name="workouts_completed" min="0" max="30" value="0" required>
+        </div>
+        <div class="form-group">
+          <label>Workouts Planned</label>
+          <input type="number" name="workouts_planned" min="1" max="30" value="5" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cardio (minutes)</label>
+          <input type="number" name="cardio_minutes" min="0" value="0">
+        </div>
+        <div class="form-group">
+          <label>Strength Sessions</label>
+          <input type="number" name="strength_sessions" min="0" value="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Current Weight (kg) — optional</label>
+        <input type="number" name="weight_kg" step="0.1" min="30" max="300" placeholder="e.g. 75.5">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea name="notes" rows="2" placeholder="How did the week go?"></textarea>
+      </div>
+      <div class="form-buttons">
+        <button type="submit" class="btn btn-primary" style="background:var(--blue);">Save Entry</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('perfModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Rate Trainer Modal -->
+<div id="feedbackModal" class="modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('feedbackModal')">✕</button>
+    <div class="modal-title">⭐ Rate Your Trainer</div>
+    <form method="POST" action="{{ url_for('add_feedback') }}">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Trainer</label>
+          <select name="trainer_id" required>
+            {% for t in trainers %}
+            <option value="{{ t.id }}" {% if t.id == member.trainer_id %}selected{% endif %}>{{ t.full_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Week Starting (Monday)</label>
+          <input type="date" name="week_start" required id="fbWeekInput">
+        </div>
+      </div>
+
+      {% for field, label, desc in [
+        ('rating', 'Overall Rating', 'Your overall experience this week'),
+        ('punctuality', 'Punctuality', 'Did they start/end sessions on time?'),
+        ('knowledge', 'Knowledge', 'Were sessions well-structured and informative?'),
+        ('motivation', 'Motivation', 'Did they keep you motivated and energized?')
+      ] %}
+      <div class="form-group">
+        <label>{{ label }}</label>
+        <p style="font-size:11px; color:var(--muted); margin-bottom:8px;">{{ desc }}</p>
+        <div class="star-rating" data-field="{{ field }}">
+          {% for i in range(1, 6) %}
+          <span class="star" data-value="{{ i }}">★</span>
+          {% endfor %}
+        </div>
+        <input type="hidden" name="{{ field }}" id="field_{{ field }}" required value="0">
+      </div>
+      {% endfor %}
+
+      <div class="form-group">
+        <label>Comments (optional)</label>
+        <textarea name="comments" rows="3" placeholder="Any specific feedback or suggestions…"></textarea>
+      </div>
+      <div class="form-buttons">
+        <button type="submit" class="btn btn-primary" style="background:var(--blue);">Submit Feedback</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('feedbackModal')">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// Set default week to most recent Monday
+function getMostRecentMonday() {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  return d.toISOString().split('T')[0];
+}
+const monday = getMostRecentMonday();
+document.getElementById('weekInput').value = monday;
+document.getElementById('fbWeekInput').value = monday;
+
+// Modal helpers
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+window.addEventListener('click', e => {
+  document.querySelectorAll('.modal.open').forEach(m => { if (e.target === m) m.classList.remove('open'); });
+});
+
+// Star rating interaction
+document.querySelectorAll('.star-rating').forEach(wrap => {
+  const field = wrap.dataset.field;
+  const stars = wrap.querySelectorAll('.star');
+  const input = document.getElementById('field_' + field);
+  stars.forEach((s, i) => {
+    s.addEventListener('click', () => {
+      input.value = i + 1;
+      stars.forEach((st, j) => st.classList.toggle('filled', j <= i));
+    });
+    s.addEventListener('mouseenter', () => {
+      stars.forEach((st, j) => st.classList.toggle('filled', j <= i));
+    });
+    s.addEventListener('mouseleave', () => {
+      const val = parseInt(input.value) || 0;
+      stars.forEach((st, j) => st.classList.toggle('filled', j < val));
+    });
+  });
+});
+
+// Charts
+{% if perf_history %}
+const perfData = {{ perf_history | tojson }};
+const labels = perfData.map(p => p.week_start).reverse();
+
+// Workout chart
+const wCtx = document.getElementById('workoutChart').getContext('2d');
+new Chart(wCtx, {
+  type: 'bar',
+  data: {
+    labels,
+    datasets: [
+      { label: 'Completed', data: perfData.map(p => p.workouts_completed).reverse(), backgroundColor: 'rgba(59,130,246,.7)' },
+      { label: 'Planned', data: perfData.map(p => p.workouts_planned).reverse(), backgroundColor: 'rgba(100,116,139,.3)' },
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { labels: { color: '#64748b' } } },
+    scales: {
+      x: { ticks: { color: '#64748b' }, grid: { color: '#2a2f42' } },
+      y: { ticks: { color: '#64748b' }, grid: { color: '#2a2f42' }, beginAtZero: true }
+    }
+  }
+});
+
+// Weight chart
+const weightsRaw = perfData.map(p => p.weight_kg).reverse();
+const hasWeight = weightsRaw.some(w => w !== null);
+if (hasWeight) {
+  const wgtCtx = document.getElementById('weightChart').getContext('2d');
+  new Chart(wgtCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Weight (kg)',
+        data: weightsRaw,
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34,197,94,.1)',
+        tension: .4,
+        fill: true,
+        spanGaps: true,
+        pointRadius: 5,
+        pointBackgroundColor: '#22c55e',
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#64748b' } } },
+      scales: {
+        x: { ticks: { color: '#64748b' }, grid: { color: '#2a2f42' } },
+        y: { ticks: { color: '#64748b' }, grid: { color: '#2a2f42' } }
+      }
+    }
+  });
+}
+{% endif %}
+</script>
+</body>
+</html>

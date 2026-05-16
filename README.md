@@ -1,2 +1,2 @@
-#Gym Membership Management System 
+# Gym Membership Management System 
 This Project Mainly Focuses on Gym Membership Management System Using Database Management System Operations to monitor the activities of members, trainers, payments and memberships and attendance by the admin and the users can add, update, delete and pay for the particular memberships by the member. Based on this We have Performed DBMS Operations to focus on this Gym membership operations for every Gym
